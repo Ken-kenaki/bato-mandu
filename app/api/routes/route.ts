@@ -49,14 +49,52 @@ async function getFullRoute(routeDoc: any, databases: any) {
     };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
-        const { databases } = createAdminClient();
-        const response = await databases.listDocuments(APPWRITE_DATABASE_ID, COLLECTIONS.BUS_ROUTES);
-        
-        const routes = await Promise.all(response.documents.map(d => getFullRoute(d, databases)));
+        const { searchParams } = new URL(request.url);
+        const limitParam = searchParams.get('limit');
+        const offsetParam = searchParams.get('offset');
+        const search = searchParams.get('search')?.toLowerCase() || '';
+        const transport = searchParams.get('transport');
 
-        return NextResponse.json({ data: routes });
+        const limit = limitParam ? parseInt(limitParam) : 25;
+        const offset = offsetParam ? parseInt(offsetParam) : 0;
+
+        const { databases } = createAdminClient();
+        
+        // Fetch up to 100 to ensure we get all routes in the system for in-memory filtering.
+        // If the DB grows significantly, we would need a different approach (e.g., search indexes).
+        const response = await databases.listDocuments(APPWRITE_DATABASE_ID, COLLECTIONS.BUS_ROUTES, [
+            Query.limit(100)
+        ]);
+        
+        let routes = await Promise.all(response.documents.map(d => getFullRoute(d, databases)));
+
+        // Apply filters
+        if (transport && transport !== 'all') {
+            routes = routes.filter(r => 
+                (transport === 'micro' && r.longName.toLowerCase().includes('micro')) ||
+                (transport === 'tempo' && r.longName.toLowerCase().includes('tempo')) ||
+                (transport === 'bus' && (r.longName.toLowerCase().includes('bus') || r.longName.toLowerCase().includes('sajha'))) ||
+                r.transport?.toLowerCase() === transport.toLowerCase()
+            );
+        }
+
+        if (search) {
+            routes = routes.filter(r => {
+                const matchesLongName = r.longName.toLowerCase().includes(search);
+                const matchesShortName = r.shortName.toLowerCase().includes(search);
+                const matchesStops = r.stops.some((stop: any) => stop.name?.toLowerCase().includes(search));
+                return matchesLongName || matchesShortName || matchesStops;
+            });
+        }
+
+        const total = routes.length;
+        
+        // Paginate the filtered results
+        const paginatedRoutes = routes.slice(offset, offset + limit);
+
+        return NextResponse.json({ data: paginatedRoutes, total });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
