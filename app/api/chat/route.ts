@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client, Databases, Query } from 'node-appwrite';
+import { Query } from 'node-appwrite';
+import { createAdminClient } from '@/app/lib/appwrite-server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -10,19 +11,40 @@ export async function POST(request: NextRequest) {
         }
 
         // 1. Fetch some basic context from Appwrite
-        const client = new Client()
-            .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-            .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
-        const db = new Databases(client);
+        const { databases: db } = createAdminClient();
         
-        // We fetch a list of routes to give context to the LLM
+        // We fetch routes, stops, and links to give rich context to the LLM
         const routesRes = await db.listDocuments(
             process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!, 
             'bus_routes', 
             [Query.limit(50)]
         );
+        const routeStopsRes = await db.listDocuments(
+            process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!, 
+            'route_stops', 
+            [Query.limit(1000)]
+        );
+        const stopsRes = await db.listDocuments(
+            process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!, 
+            'bus_stops', 
+            [Query.limit(1000)]
+        );
+
+        const stopMap = new Map();
+        for(const s of stopsRes.documents) stopMap.set(s.$id, s.name);
         
-        const routesContext = routesRes.documents.map(r => `${r.shortName} (${r.longName}) - ${r.transport}`).join('\n');
+        const routeStopsMap = new Map();
+        for(const rs of routeStopsRes.documents) {
+             if(!routeStopsMap.has(rs.routeId)) routeStopsMap.set(rs.routeId, []);
+             routeStopsMap.get(rs.routeId).push({ stopId: rs.stopId, order: rs.stopOrder });
+        }
+        
+        const routesContext = routesRes.documents.map(r => {
+             const rsList = routeStopsMap.get(r.$id) || [];
+             rsList.sort((a: any, b: any) => a.order - b.order);
+             const stopNames = rsList.map((rs: any) => stopMap.get(rs.stopId)).filter(Boolean).join(" -> ");
+             return `${r.shortName} (${r.longName}) - ${r.transport}: ${stopNames}`;
+        }).join('\n');
 
         const systemPrompt = `You are a helpful transit assistant for Kathmandu (Bato-Mandu).
 Here are the available routes:
@@ -33,7 +55,7 @@ Help the user figure out which route to take. Be extremely concise. Keep the ans
         // 2. Call Cloudflare AI
         const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
         const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-        const model = process.env.CLOUDFLARE_AI_MODEL || '@cf/meta/llama-3-8b-instruct';
+        const model = process.env.CLOUDFLARE_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct';
 
         const aiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
 

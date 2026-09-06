@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, Account } from 'node-appwrite';
+import { createAdminClient } from '@/app/lib/appwrite-server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -16,7 +17,11 @@ export async function POST(request: NextRequest) {
         const account = new Account(client);
         const session = await account.createEmailPasswordSession(email, password);
 
-        return NextResponse.json({ data: { session } }, { status: 200 });
+        // Fetch user details to return in response
+        const { users } = createAdminClient();
+        const user = await users.get(session.userId);
+
+        return NextResponse.json({ data: { user, session } }, { status: 200 });
     } catch (error: any) {
         return NextResponse.json({ error: error.message || 'Login failed' }, { status: 401 });
     }
