@@ -1,6 +1,21 @@
 import { Client, Databases, Users, Account } from 'node-appwrite';
 import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID } from './constants';
 
+// Patch global fetch to remove Node.js specific options that node-appwrite might add
+// which are not supported by Cloudflare Workers/Pages edge environment
+if (!(globalThis as any).__fetchPatched) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init) {
+            // Strip out unsupported options passed by node-appwrite
+            delete (init as any).ALPNProtocols;
+            delete (init as any).agent;
+        }
+        return originalFetch(input, init);
+    };
+    (globalThis as any).__fetchPatched = true;
+}
+
 // For Admin server operations (bypasses permissions)
 export function createAdminClient() {
     const client = new Client()
