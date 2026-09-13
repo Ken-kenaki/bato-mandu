@@ -125,6 +125,32 @@ async function createAttributes() {
     await sleep(10000);
 }
 
+async function createIndexSafely(collectionId, key, type, attributes, orders) {
+    try {
+        await databases.createIndex(APPWRITE_DATABASE_ID, collectionId, key, type, attributes, orders);
+        console.log(`Created index ${key} for ${collectionId}`);
+    } catch (e) {
+        if (e.code === 409) {
+            console.log(`Index ${key} already exists for ${collectionId}`);
+        } else {
+            console.error(`Error creating index ${key} for ${collectionId}:`, e.message);
+        }
+    }
+}
+
+async function createIndexes() {
+    console.log("Setting up indexes...");
+    await createIndexSafely(COLLECTIONS.ROUTE_STOPS, 'idx_routeId', 'key', ['routeId'], ['ASC']);
+    await createIndexSafely(COLLECTIONS.ROUTE_STOPS, 'idx_stopOrder', 'key', ['stopOrder'], ['ASC']);
+    await createIndexSafely(COLLECTIONS.BUS_POSITIONS, 'idx_busId', 'key', ['busId'], ['ASC']);
+    await createIndexSafely(COLLECTIONS.BUSES, 'idx_assignedRouteId', 'key', ['assignedRouteId'], ['ASC']);
+    await createIndexSafely(COLLECTIONS.DRIVERS, 'idx_assignedBusId', 'key', ['assignedBusId'], ['ASC']);
+    await createIndexSafely(COLLECTIONS.SCHEDULES, 'idx_routeId', 'key', ['routeId'], ['ASC']);
+    
+    console.log("Waiting for indexes to be available (10s)...");
+    await sleep(10000);
+}
+
 // ─── Data Seeding ─────────────────────────────────────────────────────────────
 
 const TRANSPORT_COLORS = {
@@ -360,6 +386,7 @@ async function main() {
         }
 
         await createAttributes();
+        await createIndexes();
         await seedData();
         
         console.log("✅ Appwrite setup and seeding finished successfully!");
