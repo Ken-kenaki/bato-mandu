@@ -4,8 +4,6 @@ import { createAdminClient } from '@/app/lib/appwrite-server';
 import { COLLECTIONS, APPWRITE_DATABASE_ID } from '@/app/lib/constants';
 import { ID, Query } from 'node-appwrite';
 
-export const runtime = 'edge';
-
 function getAppwriteApiKey() {
     let apiKey = process.env.APPWRITE_API_KEY;
     try {

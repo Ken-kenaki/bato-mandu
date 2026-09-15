@@ -20,6 +20,7 @@
     "node-appwrite": "^28.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-is": "^19.3.0",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0"
   },
