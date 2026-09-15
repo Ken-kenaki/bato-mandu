@@ -1,21 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
 import { createAdminClient } from '@/app/lib/appwrite-server';
 import { COLLECTIONS, APPWRITE_DATABASE_ID } from '@/app/lib/constants';
 import { ID, Query } from 'node-appwrite';
 
-function getAppwriteApiKey() {
-    let apiKey = process.env.APPWRITE_API_KEY;
-    try {
-        const env = getRequestContext().env as any;
-        if (env && env.APPWRITE_API_KEY) {
-            apiKey = env.APPWRITE_API_KEY;
-        }
-    } catch (e) {
-        // Fallback for local development if not in a Cloudflare context
-    }
-    return apiKey;
-}
 
 // Helper to fetch full route data including ordered stops
 async function getFullRoute(routeDoc: any, databases: any) {
@@ -74,8 +61,7 @@ export async function GET(request: NextRequest) {
         const limit = limitParam ? parseInt(limitParam) : 25;
         const offset = offsetParam ? parseInt(offsetParam) : 0;
 
-        const apiKey = getAppwriteApiKey();
-        const { databases } = createAdminClient(apiKey);
+        const { databases } = createAdminClient();
         
         // Fetch up to 100 to ensure we get all routes in the system for in-memory filtering.
         // If the DB grows significantly, we would need a different approach (e.g., search indexes).
@@ -126,8 +112,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'At least 2 stopIds are required' }, { status: 400 });
         }
 
-        const apiKey = getAppwriteApiKey();
-        const { databases } = createAdminClient(apiKey);
+        const { databases } = createAdminClient();
         
         const route = await databases.createDocument(
             APPWRITE_DATABASE_ID, 
