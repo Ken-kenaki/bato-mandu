@@ -1,13 +1,41 @@
 import { Client, Databases, Users, Account } from 'node-appwrite';
 import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID } from './constants';
 
-// Patch global fetch to remove Node.js specific options that node-appwrite might add
-// which are not supported by Cloudflare Workers/Pages edge environment
+import https from 'node:https';
+import tls from 'node:tls';
+
+// Patch Cloudflare Workers node:https, node:tls, and global fetch to remove ALPNProtocols option
 if (!(globalThis as any).__fetchPatched) {
+    try {
+        if (https && https.request) {
+            const origHttpsRequest = https.request;
+            (https as any).request = function (...args: any[]) {
+                for (let i = 0; i < args.length; i++) {
+                    if (args[i] && typeof args[i] === 'object') {
+                        delete args[i].ALPNProtocols;
+                    }
+                }
+                return origHttpsRequest.apply(this, args as any);
+            };
+        }
+        if (tls && tls.connect) {
+            const origTlsConnect = tls.connect;
+            (tls as any).connect = function (...args: any[]) {
+                for (let i = 0; i < args.length; i++) {
+                    if (args[i] && typeof args[i] === 'object') {
+                        delete args[i].ALPNProtocols;
+                    }
+                }
+                return origTlsConnect.apply(this, args as any);
+            };
+        }
+    } catch (e) {
+        // Ignored
+    }
+
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
         if (init) {
-            // Strip out unsupported options passed by node-appwrite
             delete (init as any).ALPNProtocols;
             delete (init as any).agent;
         }
