@@ -17,11 +17,11 @@ if (!(globalThis as any).__fetchPatched) {
 }
 
 // For Admin server operations (bypasses permissions)
-export function createAdminClient() {
+export function createAdminClient(apiKey?: string) {
     const client = new Client()
         .setEndpoint(APPWRITE_ENDPOINT)
         .setProject(APPWRITE_PROJECT_ID)
-        .setKey(process.env.APPWRITE_API_KEY!);
+        .setKey((apiKey || process.env.APPWRITE_API_KEY) as string);
 
     return {
         get account() { return new Account(client); },
